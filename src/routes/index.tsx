@@ -20,6 +20,15 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">
+        Cargando mapa…
+      </div>
+    );
+  }
   return (
     <Suspense
       fallback={
