@@ -21,8 +21,11 @@ import {
   Cross,
   ShieldAlert,
   RotateCw,
+  ShieldCheck,
+  Ban,
 } from "lucide-react";
 import { VEHICLES, vehicleRouteWarnings, type Vehicle, type VehicleCategory } from "@/data/vehicles";
+import { analyzeRoute, summaryMessage, type RouteAnalysis } from "@/lib/restrictions";
 
 const CATEGORY_META: Record<
   VehicleCategory,
@@ -53,6 +56,12 @@ const targetIcon = L.divIcon({
   iconSize: [34, 44],
   iconAnchor: [17, 42],
 });
+const lastAccessIcon = L.divIcon({
+  className: "",
+  html: `<div style="background:oklch(0.78 0.17 75);width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 4px 12px rgba(0,0,0,.5);font-size:14px;font-weight:bold;color:#000">!</div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+});
 
 function FlyTo({ position }: { position: LatLng | null }) {
   const map = useMap();
@@ -81,8 +90,11 @@ export function FireRouteApp() {
   const [flyTarget, setFlyTarget] = useState<LatLng | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [route, setRoute] = useState<LatLng[]>([]);
+  const [analysis, setAnalysis] = useState<RouteAnalysis | null>(null);
+  const [summary, setSummary] = useState<string>("");
   const [stats, setStats] = useState<{ km: number; min: number } | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) return;
@@ -103,26 +115,59 @@ export function FireRouteApp() {
     setCalculating(true);
     setWarnings([]);
     setRoute([]);
+    setAnalysis(null);
+    setSummary("");
     setStats(null);
     try {
-      // OSRM public demo. No real truck restrictions, so we annotate warnings client-side.
       const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson&alternatives=true`;
       const res = await fetch(url);
       const data = await res.json();
       if (!data.routes?.length) throw new Error("Sin ruta");
-      // Pick the route with fewest very-tight residential segments would require road class data.
-      // We use the first (fastest) and surface generic restriction warnings based on vehicle size.
-      const r = data.routes[0];
-      const coords: LatLng[] = r.geometry.coordinates.map(([lng, lat]: [number, number]) => ({ lat, lng }));
-      setRoute(coords);
-      setStats({ km: r.distance / 1000, min: r.duration / 60 });
+
+      const candidates: { coords: LatLng[]; km: number; min: number }[] = data.routes.map(
+        (r: { geometry: { coordinates: [number, number][] }; distance: number; duration: number }) => ({
+          coords: r.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
+          km: r.distance / 1000,
+          min: r.duration / 60,
+        })
+      );
+
+      setAnalyzing(true);
+      type Cand = { coords: LatLng[]; km: number; min: number; analysis: RouteAnalysis };
+      let chosen: Cand | null = null;
+      let bestPartial: Cand | null = null;
+      for (const c of candidates) {
+        const a = await analyzeRoute(c.coords, vehicle);
+        if (a.fullyAccessible) { chosen = { ...c, analysis: a }; break; }
+        if (!bestPartial || a.violations.length < bestPartial.analysis.violations.length) {
+          bestPartial = { ...c, analysis: a };
+        }
+      }
+      const final: Cand = chosen ?? bestPartial!;
+      setRoute(final.coords);
+      setAnalysis(final.analysis);
+      setStats({ km: final.km, min: final.min });
+      setSummary(summaryMessage(final.analysis, vehicle));
 
       const w = vehicleRouteWarnings(vehicle);
-      w.push("Ruta calculada con perfil estándar. Verificar in situ restricciones reales.");
+      if (!final.analysis.fullyAccessible) {
+        w.unshift("Ruta parcialmente accesible: tramo final inaccesible para este vehículo.");
+        const seen = new Set<string>();
+        for (const v of final.analysis.violations.slice(0, 5)) {
+          const key = v.reason + (v.wayName ?? "");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          w.push(`${v.reason}${v.wayName ? ` — ${v.wayName}` : ""}`);
+        }
+        w.push("Último punto accesible marcado en el mapa.");
+      } else if (chosen) {
+        w.unshift("Ruta validada con datos OSM (sin restricciones detectadas).");
+      }
       setWarnings(w);
     } catch {
       setWarnings(["No se pudo calcular la ruta. Reintente."]);
     } finally {
+      setAnalyzing(false);
       setCalculating(false);
     }
   };
@@ -260,8 +305,35 @@ export function FireRouteApp() {
             className="flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-primary text-lg font-bold text-primary-foreground shadow-lg transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {calculating ? <Loader2 className="h-6 w-6 animate-spin" /> : <Navigation className="h-6 w-6" />}
-            {calculating ? "Calculando…" : "Calcular Ruta"}
+            {calculating ? (analyzing ? "Analizando OSM…" : "Calculando…") : "Calcular Ruta"}
           </button>
+
+          {/* Summary banner */}
+          {summary && analysis && (
+            <div
+              className={`flex items-start gap-3 rounded-xl border p-4 ${
+                analysis.fullyAccessible
+                  ? "border-emerald-500/40 bg-emerald-500/10"
+                  : "border-destructive/40 bg-destructive/10"
+              }`}
+            >
+              {analysis.fullyAccessible ? (
+                <ShieldCheck className="h-5 w-5 flex-shrink-0 text-emerald-400" />
+              ) : (
+                <Ban className="h-5 w-5 flex-shrink-0 text-destructive" />
+              )}
+              <div className="min-w-0">
+                <div
+                  className={`text-xs font-bold uppercase tracking-wider ${
+                    analysis.fullyAccessible ? "text-emerald-400" : "text-destructive"
+                  }`}
+                >
+                  {analysis.fullyAccessible ? "Ruta operativa" : "Ruta restringida"}
+                </div>
+                <div className="mt-0.5 text-sm font-semibold leading-snug">{summary}</div>
+              </div>
+            </div>
+          )}
 
           {/* Stats */}
           {stats && (
@@ -305,10 +377,24 @@ export function FireRouteApp() {
           />
           <Marker position={[origin.lat, origin.lng]} icon={fireIcon} />
           {destination && <Marker position={[destination.lat, destination.lng]} icon={targetIcon} />}
-          {route.length > 0 && (
+          {route.length > 0 && analysis && (
             <>
-              <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "#000", weight: 9, opacity: 0.4 }} />
-              <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "oklch(0.65 0.22 25)", weight: 5, opacity: 1 }} />
+              <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "#000", weight: 9, opacity: 0.35 }} />
+              {analysis.accessible.length > 1 && (
+                <Polyline
+                  positions={analysis.accessible.map((p) => [p.lat, p.lng] as [number, number])}
+                  pathOptions={{ color: analysis.fullyAccessible ? "oklch(0.65 0.22 25)" : "oklch(0.7 0.17 155)", weight: 5, opacity: 1 }}
+                />
+              )}
+              {analysis.blocked.length > 1 && (
+                <Polyline
+                  positions={analysis.blocked.map((p) => [p.lat, p.lng] as [number, number])}
+                  pathOptions={{ color: "oklch(0.62 0.24 25)", weight: 5, opacity: 0.95, dashArray: "8 8" }}
+                />
+              )}
+              {!analysis.fullyAccessible && analysis.lastAccessible && (
+                <Marker position={[analysis.lastAccessible.lat, analysis.lastAccessible.lng]} icon={lastAccessIcon} />
+              )}
             </>
           )}
           {route.length > 0 ? (
@@ -319,9 +405,15 @@ export function FireRouteApp() {
         </MapContainer>
 
         {/* Floating status pill */}
-        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full border border-border bg-card/90 px-5 py-2 text-sm font-medium shadow-xl backdrop-blur">
-          <span className="text-muted-foreground">Vehículo activo · </span>
+        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 max-w-[92%] rounded-full border border-border bg-card/90 px-5 py-2 text-sm font-medium shadow-xl backdrop-blur">
+          <span className="text-muted-foreground">Vehículo · </span>
           <span className="text-primary">{vehicle.name}</span>
+          {summary && (
+            <>
+              <span className="text-muted-foreground"> · </span>
+              <span className={analysis?.fullyAccessible ? "text-emerald-400" : "text-destructive"}>{summary}</span>
+            </>
+          )}
         </div>
       </main>
     </div>
