@@ -21,8 +21,11 @@ import {
   Cross,
   ShieldAlert,
   RotateCw,
+  ShieldCheck,
+  Ban,
 } from "lucide-react";
 import { VEHICLES, vehicleRouteWarnings, type Vehicle, type VehicleCategory } from "@/data/vehicles";
+import { analyzeRoute, summaryMessage, type RouteAnalysis } from "@/lib/restrictions";
 
 const CATEGORY_META: Record<
   VehicleCategory,
