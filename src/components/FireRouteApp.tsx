@@ -293,7 +293,11 @@ export function FireRouteApp() {
               <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "oklch(0.65 0.22 25)", weight: 5, opacity: 1 }} />
             </>
           )}
-          <FitBounds points={route.length ? route : points} />
+          {route.length > 0 ? (
+            <FitBounds points={route} />
+          ) : (
+            <FlyTo position={destination} />
+          )}
         </MapContainer>
 
         {/* Floating status pill */}
