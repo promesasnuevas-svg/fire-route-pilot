@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Truck, Search, Navigation, MapPin, Ruler, Weight, AlertTriangle, Loader2 } from "lucide-react";
+import { Truck, Search, Navigation, MapPin, Ruler, Weight, AlertTriangle, Loader2, Crosshair } from "lucide-react";
 
 type Vehicle = {
   id: string;
