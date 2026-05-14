@@ -305,8 +305,35 @@ export function FireRouteApp() {
             className="flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-primary text-lg font-bold text-primary-foreground shadow-lg transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {calculating ? <Loader2 className="h-6 w-6 animate-spin" /> : <Navigation className="h-6 w-6" />}
-            {calculating ? "Calculando…" : "Calcular Ruta"}
+            {calculating ? (analyzing ? "Analizando OSM…" : "Calculando…") : "Calcular Ruta"}
           </button>
+
+          {/* Summary banner */}
+          {summary && analysis && (
+            <div
+              className={`flex items-start gap-3 rounded-xl border p-4 ${
+                analysis.fullyAccessible
+                  ? "border-emerald-500/40 bg-emerald-500/10"
+                  : "border-destructive/40 bg-destructive/10"
+              }`}
+            >
+              {analysis.fullyAccessible ? (
+                <ShieldCheck className="h-5 w-5 flex-shrink-0 text-emerald-400" />
+              ) : (
+                <Ban className="h-5 w-5 flex-shrink-0 text-destructive" />
+              )}
+              <div className="min-w-0">
+                <div
+                  className={`text-xs font-bold uppercase tracking-wider ${
+                    analysis.fullyAccessible ? "text-emerald-400" : "text-destructive"
+                  }`}
+                >
+                  {analysis.fullyAccessible ? "Ruta operativa" : "Ruta restringida"}
+                </div>
+                <div className="mt-0.5 text-sm font-semibold leading-snug">{summary}</div>
+              </div>
+            </div>
+          )}
 
           {/* Stats */}
           {stats && (
