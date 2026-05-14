@@ -1,26 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
+
+const FireRouteApp = lazy(() =>
+  import("@/components/FireRouteApp").then((m) => ({ default: m.FireRouteApp }))
+);
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "FireRoute — Rutas para vehículos de emergencia" },
+      {
+        name: "description",
+        content:
+          "Aplicación profesional para calcular rutas de camiones de bomberos sobre OpenStreetMap, optimizada para tablets en vehículos de emergencia.",
+      },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}
-
 function Index() {
-  return <PlaceholderIndex />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">
+          Cargando mapa…
+        </div>
+      }
+    >
+      <FireRouteApp />
+    </Suspense>
+  );
 }
