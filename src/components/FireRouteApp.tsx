@@ -377,10 +377,24 @@ export function FireRouteApp() {
           />
           <Marker position={[origin.lat, origin.lng]} icon={fireIcon} />
           {destination && <Marker position={[destination.lat, destination.lng]} icon={targetIcon} />}
-          {route.length > 0 && (
+          {route.length > 0 && analysis && (
             <>
-              <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "#000", weight: 9, opacity: 0.4 }} />
-              <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "oklch(0.65 0.22 25)", weight: 5, opacity: 1 }} />
+              <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "#000", weight: 9, opacity: 0.35 }} />
+              {analysis.accessible.length > 1 && (
+                <Polyline
+                  positions={analysis.accessible.map((p) => [p.lat, p.lng] as [number, number])}
+                  pathOptions={{ color: analysis.fullyAccessible ? "oklch(0.65 0.22 25)" : "oklch(0.7 0.17 155)", weight: 5, opacity: 1 }}
+                />
+              )}
+              {analysis.blocked.length > 1 && (
+                <Polyline
+                  positions={analysis.blocked.map((p) => [p.lat, p.lng] as [number, number])}
+                  pathOptions={{ color: "oklch(0.62 0.24 25)", weight: 5, opacity: 0.95, dashArray: "8 8" }}
+                />
+              )}
+              {!analysis.fullyAccessible && analysis.lastAccessible && (
+                <Marker position={[analysis.lastAccessible.lat, analysis.lastAccessible.lng]} icon={lastAccessIcon} />
+              )}
             </>
           )}
           {route.length > 0 ? (
