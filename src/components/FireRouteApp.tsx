@@ -90,8 +90,11 @@ export function FireRouteApp() {
   const [flyTarget, setFlyTarget] = useState<LatLng | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [route, setRoute] = useState<LatLng[]>([]);
+  const [analysis, setAnalysis] = useState<RouteAnalysis | null>(null);
+  const [summary, setSummary] = useState<string>("");
   const [stats, setStats] = useState<{ km: number; min: number } | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) return;
@@ -112,26 +115,58 @@ export function FireRouteApp() {
     setCalculating(true);
     setWarnings([]);
     setRoute([]);
+    setAnalysis(null);
+    setSummary("");
     setStats(null);
     try {
-      // OSRM public demo. No real truck restrictions, so we annotate warnings client-side.
       const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson&alternatives=true`;
       const res = await fetch(url);
       const data = await res.json();
       if (!data.routes?.length) throw new Error("Sin ruta");
-      // Pick the route with fewest very-tight residential segments would require road class data.
-      // We use the first (fastest) and surface generic restriction warnings based on vehicle size.
-      const r = data.routes[0];
-      const coords: LatLng[] = r.geometry.coordinates.map(([lng, lat]: [number, number]) => ({ lat, lng }));
-      setRoute(coords);
-      setStats({ km: r.distance / 1000, min: r.duration / 60 });
+
+      const candidates: { coords: LatLng[]; km: number; min: number }[] = data.routes.map(
+        (r: { geometry: { coordinates: [number, number][] }; distance: number; duration: number }) => ({
+          coords: r.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
+          km: r.distance / 1000,
+          min: r.duration / 60,
+        })
+      );
+
+      setAnalyzing(true);
+      let chosen: { coords: LatLng[]; km: number; min: number; analysis: RouteAnalysis } | null = null;
+      let bestPartial: typeof chosen = null;
+      for (const c of candidates) {
+        const a = await analyzeRoute(c.coords, vehicle);
+        if (a.fullyAccessible) { chosen = { ...c, analysis: a }; break; }
+        if (!bestPartial || a.violations.length < bestPartial.analysis.violations.length) {
+          bestPartial = { ...c, analysis: a };
+        }
+      }
+      const final = chosen ?? bestPartial!;
+      setRoute(final.coords);
+      setAnalysis(final.analysis);
+      setStats({ km: final.km, min: final.min });
+      setSummary(summaryMessage(final.analysis, vehicle));
 
       const w = vehicleRouteWarnings(vehicle);
-      w.push("Ruta calculada con perfil estándar. Verificar in situ restricciones reales.");
+      if (!final.analysis.fullyAccessible) {
+        w.unshift("Ruta parcialmente accesible: tramo final inaccesible para este vehículo.");
+        const seen = new Set<string>();
+        for (const v of final.analysis.violations.slice(0, 5)) {
+          const key = v.reason + (v.wayName ?? "");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          w.push(`${v.reason}${v.wayName ? ` — ${v.wayName}` : ""}`);
+        }
+        w.push("Último punto accesible marcado en el mapa.");
+      } else if (chosen) {
+        w.unshift("Ruta validada con datos OSM (sin restricciones detectadas).");
+      }
       setWarnings(w);
     } catch {
       setWarnings(["No se pudo calcular la ruta. Reintente."]);
     } finally {
+      setAnalyzing(false);
       setCalculating(false);
     }
   };
