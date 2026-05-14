@@ -173,38 +173,45 @@ export function FireRouteApp() {
             </div>
           </section>
 
-          {/* Search */}
+          {/* Origin */}
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Origen
+              </label>
+              <button
+                onClick={useMyLocation}
+                className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-2.5 py-1 text-[11px] font-semibold text-foreground/80 hover:bg-muted"
+              >
+                <Crosshair className="h-3.5 w-3.5" />
+                Mi ubicación
+              </button>
+            </div>
+            <AddressSearch
+              placeholder="Origen: parque, calle, ciudad…"
+              initialValue={originLabel}
+              onSelect={(s) => {
+                const p = { lat: parseFloat(s.lat), lng: parseFloat(s.lon) };
+                setOrigin(p);
+                setOriginLabel(s.display_name);
+                setFlyTarget(p);
+              }}
+            />
+          </section>
+
+          {/* Destination */}
           <section>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Destino
             </label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Calle, número, ciudad…"
-                className="h-14 w-full rounded-xl border border-border bg-input pl-11 pr-4 text-base outline-none transition focus:border-primary"
-              />
-              {searching && (
-                <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />
-              )}
-            </div>
-            {suggestions.length > 0 && (
-              <ul className="mt-2 max-h-64 overflow-y-auto rounded-xl border border-border bg-card">
-                {suggestions.map((s, i) => (
-                  <li key={i}>
-                    <button
-                      onClick={() => pickSuggestion(s)}
-                      className="flex w-full items-start gap-2 border-b border-border/60 px-3 py-3 text-left text-sm last:border-b-0 hover:bg-muted/50"
-                    >
-                      <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" />
-                      <span className="line-clamp-2">{s.display_name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <AddressSearch
+              placeholder="Destino: calle, número, ciudad…"
+              onSelect={(s) => {
+                const p = { lat: parseFloat(s.lat), lng: parseFloat(s.lon) };
+                setDestination(p);
+                setFlyTarget(p);
+              }}
+            />
           </section>
 
           {/* Calculate */}
