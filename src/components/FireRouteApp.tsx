@@ -405,9 +405,15 @@ export function FireRouteApp() {
         </MapContainer>
 
         {/* Floating status pill */}
-        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full border border-border bg-card/90 px-5 py-2 text-sm font-medium shadow-xl backdrop-blur">
-          <span className="text-muted-foreground">Vehículo activo · </span>
+        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 max-w-[92%] rounded-full border border-border bg-card/90 px-5 py-2 text-sm font-medium shadow-xl backdrop-blur">
+          <span className="text-muted-foreground">Vehículo · </span>
           <span className="text-primary">{vehicle.name}</span>
+          {summary && (
+            <>
+              <span className="text-muted-foreground"> · </span>
+              <span className={analysis?.fullyAccessible ? "text-emerald-400" : "text-destructive"}>{summary}</span>
+            </>
+          )}
         </div>
       </main>
     </div>
