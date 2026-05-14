@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Truck, Search, Navigation, MapPin, Ruler, Weight, AlertTriangle, Loader2 } from "lucide-react";
+import { Truck, Search, Navigation, MapPin, Ruler, Weight, AlertTriangle, Loader2, Crosshair } from "lucide-react";
 
 type Vehicle = {
   id: string;
@@ -59,54 +59,26 @@ function FitBounds({ points }: { points: LatLng[] }) {
 export function FireRouteApp() {
   const [vehicle, setVehicle] = useState<Vehicle>(VEHICLES[0]);
   const [origin, setOrigin] = useState<LatLng>({ lat: 40.4168, lng: -3.7038 }); // Madrid
+  const [originLabel, setOriginLabel] = useState<string>("Madrid (predeterminado)");
   const [destination, setDestination] = useState<LatLng | null>(null);
-  const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [flyTarget, setFlyTarget] = useState<LatLng | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [route, setRoute] = useState<LatLng[]>([]);
   const [stats, setStats] = useState<{ km: number; min: number } | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Try geolocation as origin
-  useEffect(() => {
+  const useMyLocation = () => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => {
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setOrigin(p);
+        setOriginLabel("Mi ubicación actual");
+        setFlyTarget(p);
+      },
       () => {},
-      { timeout: 5000 }
+      { timeout: 5000, enableHighAccuracy: true }
     );
-  }, []);
-
-  // Debounced search
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (query.trim().length < 3) {
-      setSuggestions([]);
-      return;
-    }
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=es&q=${encodeURIComponent(query)}`,
-          { headers: { "Accept-Language": "es" } }
-        );
-        const data = (await res.json()) as Suggestion[];
-        setSuggestions(data);
-      } catch {
-        setSuggestions([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 350);
-  }, [query]);
-
-  const pickSuggestion = (s: Suggestion) => {
-    setDestination({ lat: parseFloat(s.lat), lng: parseFloat(s.lon) });
-    setQuery(s.display_name);
-    setSuggestions([]);
   };
 
   const calculateRoute = async () => {
@@ -201,38 +173,45 @@ export function FireRouteApp() {
             </div>
           </section>
 
-          {/* Search */}
+          {/* Origin */}
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Origen
+              </label>
+              <button
+                onClick={useMyLocation}
+                className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-2.5 py-1 text-[11px] font-semibold text-foreground/80 hover:bg-muted"
+              >
+                <Crosshair className="h-3.5 w-3.5" />
+                Mi ubicación
+              </button>
+            </div>
+            <AddressSearch
+              placeholder="Origen: parque, calle, ciudad…"
+              initialValue={originLabel}
+              onSelect={(s) => {
+                const p = { lat: parseFloat(s.lat), lng: parseFloat(s.lon) };
+                setOrigin(p);
+                setOriginLabel(s.display_name);
+                setFlyTarget(p);
+              }}
+            />
+          </section>
+
+          {/* Destination */}
           <section>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Destino
             </label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Calle, número, ciudad…"
-                className="h-14 w-full rounded-xl border border-border bg-input pl-11 pr-4 text-base outline-none transition focus:border-primary"
-              />
-              {searching && (
-                <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />
-              )}
-            </div>
-            {suggestions.length > 0 && (
-              <ul className="mt-2 max-h-64 overflow-y-auto rounded-xl border border-border bg-card">
-                {suggestions.map((s, i) => (
-                  <li key={i}>
-                    <button
-                      onClick={() => pickSuggestion(s)}
-                      className="flex w-full items-start gap-2 border-b border-border/60 px-3 py-3 text-left text-sm last:border-b-0 hover:bg-muted/50"
-                    >
-                      <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" />
-                      <span className="line-clamp-2">{s.display_name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <AddressSearch
+              placeholder="Destino: calle, número, ciudad…"
+              onSelect={(s) => {
+                const p = { lat: parseFloat(s.lat), lng: parseFloat(s.lon) };
+                setDestination(p);
+                setFlyTarget(p);
+              }}
+            />
           </section>
 
           {/* Calculate */}
@@ -296,7 +275,7 @@ export function FireRouteApp() {
           {route.length > 0 ? (
             <FitBounds points={route} />
           ) : (
-            <FlyTo position={destination} />
+            <FlyTo position={flyTarget} />
           )}
         </MapContainer>
 
@@ -325,6 +304,86 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-border bg-card p-3">
       <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-bold">{value}</div>
+    </div>
+  );
+}
+
+function AddressSearch({
+  placeholder,
+  initialValue,
+  onSelect,
+}: {
+  placeholder: string;
+  initialValue?: string;
+  onSelect: (s: Suggestion) => void;
+}) {
+  const [query, setQuery] = useState(initialValue ?? "");
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [open, setOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPicked = useRef<string>(initialValue ?? "");
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (query.trim().length < 3 || query === lastPicked.current) {
+      setSuggestions([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=es&q=${encodeURIComponent(query)}`,
+          { headers: { "Accept-Language": "es" } }
+        );
+        const data = (await res.json()) as Suggestion[];
+        setSuggestions(data);
+        setOpen(true);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+  }, [query]);
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => suggestions.length && setOpen(true)}
+          placeholder={placeholder}
+          className="h-14 w-full rounded-xl border border-border bg-input pl-11 pr-4 text-base outline-none transition focus:border-primary"
+        />
+        {searching && (
+          <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />
+        )}
+      </div>
+      {open && suggestions.length > 0 && (
+        <ul className="absolute z-[1000] mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-card shadow-2xl">
+          {suggestions.map((s, i) => (
+            <li key={i}>
+              <button
+                onClick={() => {
+                  lastPicked.current = s.display_name;
+                  setQuery(s.display_name);
+                  setSuggestions([]);
+                  setOpen(false);
+                  onSelect(s);
+                }}
+                className="flex w-full items-start gap-2 border-b border-border/60 px-3 py-3 text-left text-sm last:border-b-0 hover:bg-muted/50"
+              >
+                <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" />
+                <span className="line-clamp-2">{s.display_name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
