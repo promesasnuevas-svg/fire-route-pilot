@@ -32,10 +32,19 @@ const fireIcon = L.divIcon({
 });
 const targetIcon = L.divIcon({
   className: "",
-  html: `<div style="background:oklch(0.55 0.18 240);width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 4px 12px rgba(0,0,0,.5);font-size:18px">📍</div>`,
-  iconSize: [34, 34],
-  iconAnchor: [17, 34],
+  html: `<div style="position:relative;width:34px;height:44px"><div style="position:absolute;left:50%;top:0;transform:translateX(-50%);width:30px;height:30px;border-radius:50% 50% 50% 0;transform-origin:center;rotate:-45deg;background:oklch(0.62 0.24 25);border:3px solid white;box-shadow:0 4px 12px rgba(0,0,0,.5)"></div><div style="position:absolute;left:50%;top:9px;transform:translateX(-50%);width:10px;height:10px;border-radius:50%;background:white"></div></div>`,
+  iconSize: [34, 44],
+  iconAnchor: [17, 42],
 });
+
+function FlyTo({ position }: { position: LatLng | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!position) return;
+    map.flyTo([position.lat, position.lng], Math.max(map.getZoom(), 15), { duration: 0.8 });
+  }, [position, map]);
+  return null;
+}
 
 function FitBounds({ points }: { points: LatLng[] }) {
   const map = useMap();
@@ -81,7 +90,7 @@ export function FireRouteApp() {
       setSearching(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(query)}`,
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=es&q=${encodeURIComponent(query)}`,
           { headers: { "Accept-Language": "es" } }
         );
         const data = (await res.json()) as Suggestion[];
@@ -284,7 +293,11 @@ export function FireRouteApp() {
               <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "oklch(0.65 0.22 25)", weight: 5, opacity: 1 }} />
             </>
           )}
-          <FitBounds points={route.length ? route : points} />
+          {route.length > 0 ? (
+            <FitBounds points={route} />
+          ) : (
+            <FlyTo position={destination} />
+          )}
         </MapContainer>
 
         {/* Floating status pill */}
