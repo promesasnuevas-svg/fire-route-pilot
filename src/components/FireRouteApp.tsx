@@ -280,8 +280,8 @@ export function FireRouteApp() {
           {destination && <Marker position={[destination.lat, destination.lng]} icon={targetIcon} />}
           {route.length > 0 && (
             <>
-              <Polyline positions={route.map((p) => [p.lat, p.lng])} pathOptions={{ color: "#000", weight: 9, opacity: 0.4 }} />
-              <Polyline positions={route.map((p) => [p.lat, p.lng])} pathOptions={{ color: "oklch(0.65 0.22 25)", weight: 5, opacity: 1 }} />
+              <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "#000", weight: 9, opacity: 0.4 }} />
+              <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "oklch(0.65 0.22 25)", weight: 5, opacity: 1 }} />
             </>
           )}
           <FitBounds points={route.length ? route : points} />
