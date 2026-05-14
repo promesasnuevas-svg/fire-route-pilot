@@ -59,54 +59,26 @@ function FitBounds({ points }: { points: LatLng[] }) {
 export function FireRouteApp() {
   const [vehicle, setVehicle] = useState<Vehicle>(VEHICLES[0]);
   const [origin, setOrigin] = useState<LatLng>({ lat: 40.4168, lng: -3.7038 }); // Madrid
+  const [originLabel, setOriginLabel] = useState<string>("Madrid (predeterminado)");
   const [destination, setDestination] = useState<LatLng | null>(null);
-  const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [flyTarget, setFlyTarget] = useState<LatLng | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [route, setRoute] = useState<LatLng[]>([]);
   const [stats, setStats] = useState<{ km: number; min: number } | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Try geolocation as origin
-  useEffect(() => {
+  const useMyLocation = () => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => {
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setOrigin(p);
+        setOriginLabel("Mi ubicación actual");
+        setFlyTarget(p);
+      },
       () => {},
-      { timeout: 5000 }
+      { timeout: 5000, enableHighAccuracy: true }
     );
-  }, []);
-
-  // Debounced search
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (query.trim().length < 3) {
-      setSuggestions([]);
-      return;
-    }
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=es&q=${encodeURIComponent(query)}`,
-          { headers: { "Accept-Language": "es" } }
-        );
-        const data = (await res.json()) as Suggestion[];
-        setSuggestions(data);
-      } catch {
-        setSuggestions([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 350);
-  }, [query]);
-
-  const pickSuggestion = (s: Suggestion) => {
-    setDestination({ lat: parseFloat(s.lat), lng: parseFloat(s.lon) });
-    setQuery(s.display_name);
-    setSuggestions([]);
   };
 
   const calculateRoute = async () => {
