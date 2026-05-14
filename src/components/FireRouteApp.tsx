@@ -90,7 +90,7 @@ export function FireRouteApp() {
       setSearching(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(query)}`,
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=es&q=${encodeURIComponent(query)}`,
           { headers: { "Accept-Language": "es" } }
         );
         const data = (await res.json()) as Suggestion[];
