@@ -2,24 +2,41 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Truck, Search, Navigation, MapPin, Ruler, Weight, AlertTriangle, Loader2, Crosshair } from "lucide-react";
+import {
+  Truck,
+  Search,
+  Navigation,
+  MapPin,
+  Ruler,
+  Weight,
+  AlertTriangle,
+  Loader2,
+  Crosshair,
+  Flame,
+  Trees,
+  ArrowUpToLine,
+  Droplets,
+  LifeBuoy,
+  Shield,
+  Cross,
+  ShieldAlert,
+  RotateCw,
+} from "lucide-react";
+import { VEHICLES, vehicleRouteWarnings, type Vehicle, type VehicleCategory } from "@/data/vehicles";
 
-type Vehicle = {
-  id: string;
-  name: string;
-  height: number; // m
-  width: number; // m
-  weight: number; // t
-  length: number; // m
+const CATEGORY_META: Record<
+  VehicleCategory,
+  { label: string; icon: typeof Flame; color: string; tint: string }
+> = {
+  urban: { label: "Urbano", icon: Flame, color: "oklch(0.65 0.22 25)", tint: "oklch(0.65 0.22 25 / 0.15)" },
+  forestry: { label: "Forestal", icon: Trees, color: "oklch(0.7 0.17 155)", tint: "oklch(0.7 0.17 155 / 0.15)" },
+  ladder: { label: "Altura", icon: ArrowUpToLine, color: "oklch(0.78 0.17 75)", tint: "oklch(0.78 0.17 75 / 0.15)" },
+  tanker: { label: "Cisterna", icon: Droplets, color: "oklch(0.62 0.18 230)", tint: "oklch(0.62 0.18 230 / 0.15)" },
+  rescue: { label: "Rescate", icon: LifeBuoy, color: "oklch(0.7 0.18 50)", tint: "oklch(0.7 0.18 50 / 0.15)" },
+  command: { label: "Mando", icon: Shield, color: "oklch(0.7 0.05 250)", tint: "oklch(0.7 0.05 250 / 0.15)" },
+  medical: { label: "Sanitario", icon: Cross, color: "oklch(0.85 0.15 145)", tint: "oklch(0.85 0.15 145 / 0.15)" },
+  military: { label: "UME", icon: ShieldAlert, color: "oklch(0.6 0.12 130)", tint: "oklch(0.6 0.12 130 / 0.15)" },
 };
-
-const VEHICLES: Vehicle[] = [
-  { id: "bua", name: "BUA - Bomba Urbana Auto", height: 3.3, width: 2.5, weight: 14, length: 7.8 },
-  { id: "bul", name: "BUL - Bomba Urbana Ligera", height: 2.9, width: 2.2, weight: 7.5, length: 6.5 },
-  { id: "brp", name: "BRP - Bomba Rural Pesada", height: 3.5, width: 2.55, weight: 18, length: 8.5 },
-  { id: "ae", name: "AE - Autoescala", height: 3.8, width: 2.55, weight: 26, length: 12.0 },
-  { id: "abp", name: "ABP - Auto Bomba Pesada", height: 3.6, width: 2.55, weight: 22, length: 9.5 },
-];
 
 type LatLng = { lat: number; lng: number };
 type Suggestion = { display_name: string; lat: string; lon: string };
