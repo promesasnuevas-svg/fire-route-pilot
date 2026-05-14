@@ -56,6 +56,12 @@ const targetIcon = L.divIcon({
   iconSize: [34, 44],
   iconAnchor: [17, 42],
 });
+const lastAccessIcon = L.divIcon({
+  className: "",
+  html: `<div style="background:oklch(0.78 0.17 75);width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 4px 12px rgba(0,0,0,.5);font-size:14px;font-weight:bold;color:#000">!</div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+});
 
 function FlyTo({ position }: { position: LatLng | null }) {
   const map = useMap();
