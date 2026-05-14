@@ -307,3 +307,83 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function AddressSearch({
+  placeholder,
+  initialValue,
+  onSelect,
+}: {
+  placeholder: string;
+  initialValue?: string;
+  onSelect: (s: Suggestion) => void;
+}) {
+  const [query, setQuery] = useState(initialValue ?? "");
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [open, setOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPicked = useRef<string>(initialValue ?? "");
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (query.trim().length < 3 || query === lastPicked.current) {
+      setSuggestions([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=es&q=${encodeURIComponent(query)}`,
+          { headers: { "Accept-Language": "es" } }
+        );
+        const data = (await res.json()) as Suggestion[];
+        setSuggestions(data);
+        setOpen(true);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+  }, [query]);
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => suggestions.length && setOpen(true)}
+          placeholder={placeholder}
+          className="h-14 w-full rounded-xl border border-border bg-input pl-11 pr-4 text-base outline-none transition focus:border-primary"
+        />
+        {searching && (
+          <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />
+        )}
+      </div>
+      {open && suggestions.length > 0 && (
+        <ul className="absolute z-[1000] mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-card shadow-2xl">
+          {suggestions.map((s, i) => (
+            <li key={i}>
+              <button
+                onClick={() => {
+                  lastPicked.current = s.display_name;
+                  setQuery(s.display_name);
+                  setSuggestions([]);
+                  setOpen(false);
+                  onSelect(s);
+                }}
+                className="flex w-full items-start gap-2 border-b border-border/60 px-3 py-3 text-left text-sm last:border-b-0 hover:bg-muted/50"
+              >
+                <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" />
+                <span className="line-clamp-2">{s.display_name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
