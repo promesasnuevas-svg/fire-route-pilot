@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 const FireRouteApp = lazy(() =>
   import("@/components/FireRouteApp").then((m) => ({ default: m.FireRouteApp }))
