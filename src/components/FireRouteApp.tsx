@@ -133,8 +133,9 @@ export function FireRouteApp() {
       );
 
       setAnalyzing(true);
-      let chosen: { coords: LatLng[]; km: number; min: number; analysis: RouteAnalysis } | null = null;
-      let bestPartial: typeof chosen = null;
+      type Cand = { coords: LatLng[]; km: number; min: number; analysis: RouteAnalysis };
+      let chosen: Cand | null = null;
+      let bestPartial: Cand | null = null;
       for (const c of candidates) {
         const a = await analyzeRoute(c.coords, vehicle);
         if (a.fullyAccessible) { chosen = { ...c, analysis: a }; break; }
@@ -142,7 +143,7 @@ export function FireRouteApp() {
           bestPartial = { ...c, analysis: a };
         }
       }
-      const final = chosen ?? bestPartial!;
+      const final: Cand = chosen ?? bestPartial!;
       setRoute(final.coords);
       setAnalysis(final.analysis);
       setStats({ km: final.km, min: final.min });
