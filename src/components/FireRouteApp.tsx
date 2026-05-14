@@ -275,7 +275,7 @@ export function FireRouteApp() {
           {route.length > 0 ? (
             <FitBounds points={route} />
           ) : (
-            <FlyTo position={destination} />
+            <FlyTo position={flyTarget} />
           )}
         </MapContainer>
 
