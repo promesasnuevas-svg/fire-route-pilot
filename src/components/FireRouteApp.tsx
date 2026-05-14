@@ -2,24 +2,41 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Truck, Search, Navigation, MapPin, Ruler, Weight, AlertTriangle, Loader2, Crosshair } from "lucide-react";
+import {
+  Truck,
+  Search,
+  Navigation,
+  MapPin,
+  Ruler,
+  Weight,
+  AlertTriangle,
+  Loader2,
+  Crosshair,
+  Flame,
+  Trees,
+  ArrowUpToLine,
+  Droplets,
+  LifeBuoy,
+  Shield,
+  Cross,
+  ShieldAlert,
+  RotateCw,
+} from "lucide-react";
+import { VEHICLES, vehicleRouteWarnings, type Vehicle, type VehicleCategory } from "@/data/vehicles";
 
-type Vehicle = {
-  id: string;
-  name: string;
-  height: number; // m
-  width: number; // m
-  weight: number; // t
-  length: number; // m
+const CATEGORY_META: Record<
+  VehicleCategory,
+  { label: string; icon: typeof Flame; color: string; tint: string }
+> = {
+  urban: { label: "Urbano", icon: Flame, color: "oklch(0.65 0.22 25)", tint: "oklch(0.65 0.22 25 / 0.15)" },
+  forestry: { label: "Forestal", icon: Trees, color: "oklch(0.7 0.17 155)", tint: "oklch(0.7 0.17 155 / 0.15)" },
+  ladder: { label: "Altura", icon: ArrowUpToLine, color: "oklch(0.78 0.17 75)", tint: "oklch(0.78 0.17 75 / 0.15)" },
+  tanker: { label: "Cisterna", icon: Droplets, color: "oklch(0.62 0.18 230)", tint: "oklch(0.62 0.18 230 / 0.15)" },
+  rescue: { label: "Rescate", icon: LifeBuoy, color: "oklch(0.7 0.18 50)", tint: "oklch(0.7 0.18 50 / 0.15)" },
+  command: { label: "Mando", icon: Shield, color: "oklch(0.7 0.05 250)", tint: "oklch(0.7 0.05 250 / 0.15)" },
+  medical: { label: "Sanitario", icon: Cross, color: "oklch(0.85 0.15 145)", tint: "oklch(0.85 0.15 145 / 0.15)" },
+  military: { label: "UME", icon: ShieldAlert, color: "oklch(0.6 0.12 130)", tint: "oklch(0.6 0.12 130 / 0.15)" },
 };
-
-const VEHICLES: Vehicle[] = [
-  { id: "bua", name: "BUA - Bomba Urbana Auto", height: 3.3, width: 2.5, weight: 14, length: 7.8 },
-  { id: "bul", name: "BUL - Bomba Urbana Ligera", height: 2.9, width: 2.2, weight: 7.5, length: 6.5 },
-  { id: "brp", name: "BRP - Bomba Rural Pesada", height: 3.5, width: 2.55, weight: 18, length: 8.5 },
-  { id: "ae", name: "AE - Autoescala", height: 3.8, width: 2.55, weight: 26, length: 12.0 },
-  { id: "abp", name: "ABP - Auto Bomba Pesada", height: 3.6, width: 2.55, weight: 22, length: 9.5 },
-];
 
 type LatLng = { lat: number; lng: number };
 type Suggestion = { display_name: string; lat: string; lon: string };
@@ -100,11 +117,7 @@ export function FireRouteApp() {
       setRoute(coords);
       setStats({ km: r.distance / 1000, min: r.duration / 60 });
 
-      const w: string[] = [];
-      if (vehicle.height >= 3.5) w.push(`Altura ${vehicle.height} m: revisar pasos inferiores < 4 m.`);
-      if (vehicle.width >= 2.5) w.push(`Anchura ${vehicle.width} m: evitar callejones < 3 m.`);
-      if (vehicle.weight >= 18) w.push(`Peso ${vehicle.weight} t: comprobar limitaciones tonelaje en casco urbano.`);
-      if (vehicle.length >= 10) w.push(`Longitud ${vehicle.length} m: vigilar radios de giro estrechos.`);
+      const w = vehicleRouteWarnings(vehicle);
       w.push("Ruta calculada con perfil estándar. Verificar in situ restricciones reales.");
       setWarnings(w);
     } catch {
@@ -138,28 +151,53 @@ export function FireRouteApp() {
           {/* Vehicle selector */}
           <section>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Vehículo
+              Flota de vehículos
             </label>
             <div className="grid gap-2">
               {VEHICLES.map((v) => {
                 const active = v.id === vehicle.id;
+                const meta = CATEGORY_META[v.category];
+                const Icon = meta.icon;
                 return (
                   <button
                     key={v.id}
                     onClick={() => setVehicle(v)}
-                    className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left transition active:scale-[0.99] ${
+                    className={`group flex items-stretch gap-3 rounded-xl border p-3 text-left transition active:scale-[0.99] ${
                       active
-                        ? "border-primary bg-primary/15 text-foreground"
+                        ? "border-primary bg-primary/10"
                         : "border-border bg-card hover:border-muted-foreground/40"
                     }`}
                   >
-                    <div>
-                      <div className="text-sm font-semibold">{v.name}</div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        {v.height} m · {v.width} m · {v.weight} t · {v.length} m
+                    <div
+                      className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg"
+                      style={{ background: meta.tint, color: meta.color }}
+                    >
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="truncate text-sm font-semibold">{v.name}</div>
+                        {active && (
+                          <div className="ml-auto h-2 w-2 flex-shrink-0 rounded-full bg-primary shadow-[0_0_10px] shadow-primary" />
+                        )}
+                      </div>
+                      <div
+                        className="mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                        style={{ background: meta.tint, color: meta.color }}
+                      >
+                        {v.type}
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                        {v.description}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-foreground/80">
+                        <span>↕ {v.height} m</span>
+                        <span>↔ {v.width} m</span>
+                        <span>⇆ {v.length} m</span>
+                        <span>⚖ {v.weight} t</span>
+                        <span>↻ {v.turningRadius} m</span>
                       </div>
                     </div>
-                    {active && <div className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_10px] shadow-primary" />}
                   </button>
                 );
               })}
@@ -168,8 +206,9 @@ export function FireRouteApp() {
             <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-muted/40 p-3 text-xs">
               <Spec icon={<Ruler className="h-3.5 w-3.5" />} label="Altura" value={`${vehicle.height} m`} />
               <Spec icon={<Ruler className="h-3.5 w-3.5 rotate-90" />} label="Anchura" value={`${vehicle.width} m`} />
-              <Spec icon={<Weight className="h-3.5 w-3.5" />} label="Peso" value={`${vehicle.weight} t`} />
               <Spec icon={<Ruler className="h-3.5 w-3.5" />} label="Longitud" value={`${vehicle.length} m`} />
+              <Spec icon={<Weight className="h-3.5 w-3.5" />} label="Peso" value={`${vehicle.weight} t`} />
+              <Spec icon={<RotateCw className="h-3.5 w-3.5" />} label="Radio giro" value={`${vehicle.turningRadius} m`} />
             </div>
           </section>
 
