@@ -292,6 +292,12 @@ export function FireRouteApp() {
             />
           </section>
 
+          {/* Profile chip */}
+          <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">Perfil GraphHopper</span>
+            <span className="font-semibold text-primary">{PROFILE_LABEL[ghProfile]}</span>
+          </div>
+
           {/* Calculate */}
           <button
             onClick={calculateRoute}
@@ -299,19 +305,19 @@ export function FireRouteApp() {
             className="flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-primary text-lg font-bold text-primary-foreground shadow-lg transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {calculating ? <Loader2 className="h-6 w-6 animate-spin" /> : <Navigation className="h-6 w-6" />}
-            {calculating ? (analyzing ? "Analizando OSM…" : "Calculando…") : "Calcular Ruta"}
+            {calculating ? "Calculando ruta…" : "Calcular Ruta"}
           </button>
 
           {/* Summary banner */}
-          {summary && analysis && (
+          {summary && result && (
             <div
               className={`flex items-start gap-3 rounded-xl border p-4 ${
-                analysis.fullyAccessible
+                fullyAccessible
                   ? "border-emerald-500/40 bg-emerald-500/10"
                   : "border-destructive/40 bg-destructive/10"
               }`}
             >
-              {analysis.fullyAccessible ? (
+              {fullyAccessible ? (
                 <ShieldCheck className="h-5 w-5 flex-shrink-0 text-emerald-400" />
               ) : (
                 <Ban className="h-5 w-5 flex-shrink-0 text-destructive" />
@@ -319,10 +325,10 @@ export function FireRouteApp() {
               <div className="min-w-0">
                 <div
                   className={`text-xs font-bold uppercase tracking-wider ${
-                    analysis.fullyAccessible ? "text-emerald-400" : "text-destructive"
+                    fullyAccessible ? "text-emerald-400" : "text-destructive"
                   }`}
                 >
-                  {analysis.fullyAccessible ? "Ruta operativa" : "Ruta restringida"}
+                  {fullyAccessible ? "Ruta operativa" : "Ruta restringida"}
                 </div>
                 <div className="mt-0.5 text-sm font-semibold leading-snug">{summary}</div>
               </div>
@@ -334,6 +340,26 @@ export function FireRouteApp() {
             <div className="grid grid-cols-2 gap-3">
               <Stat label="Distancia" value={`${stats.km.toFixed(1)} km`} />
               <Stat label="Tiempo est." value={`${Math.round(stats.min)} min`} />
+              {eta && (
+                <div className="col-span-2 flex items-center gap-2 rounded-xl border border-border bg-card p-3">
+                  <Clock className="h-4 w-4 text-primary" />
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">ETA</span>
+                  <span className="ml-auto text-base font-bold">
+                    {eta.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              )}
+              {result && !fullyAccessible && result.walkingMeters != null && result.walkingMeters > 0 && (
+                <div className="col-span-2 flex items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3">
+                  <Footprints className="h-4 w-4 text-warning" />
+                  <span className="text-xs uppercase tracking-wider text-warning">A pie restante</span>
+                  <span className="ml-auto text-base font-bold">
+                    {result.walkingMeters >= 1000
+                      ? `${(result.walkingMeters / 1000).toFixed(2)} km`
+                      : `${Math.round(result.walkingMeters)} m`}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -371,28 +397,44 @@ export function FireRouteApp() {
           />
           <Marker position={[origin.lat, origin.lng]} icon={fireIcon} />
           {destination && <Marker position={[destination.lat, destination.lng]} icon={targetIcon} />}
-          {route.length > 0 && analysis && (
+          {result && result.coords.length > 0 && (
             <>
-              <Polyline positions={route.map((p) => [p.lat, p.lng] as [number, number])} pathOptions={{ color: "#000", weight: 9, opacity: 0.35 }} />
-              {analysis.accessible.length > 1 && (
+              {/* Casing */}
+              <Polyline
+                positions={result.coords.map((p) => [p.lat, p.lng] as [number, number])}
+                pathOptions={{ color: "#000", weight: 9, opacity: 0.35 }}
+              />
+              {fullyAccessible ? (
                 <Polyline
-                  positions={analysis.accessible.map((p) => [p.lat, p.lng] as [number, number])}
-                  pathOptions={{ color: analysis.fullyAccessible ? "oklch(0.65 0.22 25)" : "oklch(0.7 0.17 155)", weight: 5, opacity: 1 }}
+                  positions={result.coords.map((p) => [p.lat, p.lng] as [number, number])}
+                  pathOptions={{ color: "oklch(0.7 0.17 155)", weight: 5, opacity: 1 }}
                 />
-              )}
-              {analysis.blocked.length > 1 && (
-                <Polyline
-                  positions={analysis.blocked.map((p) => [p.lat, p.lng] as [number, number])}
-                  pathOptions={{ color: "oklch(0.62 0.24 25)", weight: 5, opacity: 0.95, dashArray: "8 8" }}
-                />
-              )}
-              {!analysis.fullyAccessible && analysis.lastAccessible && (
-                <Marker position={[analysis.lastAccessible.lat, analysis.lastAccessible.lng]} icon={lastAccessIcon} />
+              ) : (
+                <>
+                  {result.accessibleCoords && result.accessibleCoords.length > 1 && (
+                    <Polyline
+                      positions={result.accessibleCoords.map((p) => [p.lat, p.lng] as [number, number])}
+                      pathOptions={{ color: "oklch(0.7 0.17 155)", weight: 5, opacity: 1 }}
+                    />
+                  )}
+                  {result.blockedCoords && result.blockedCoords.length > 1 && (
+                    <Polyline
+                      positions={result.blockedCoords.map((p) => [p.lat, p.lng] as [number, number])}
+                      pathOptions={{ color: "oklch(0.62 0.24 25)", weight: 5, opacity: 0.95, dashArray: "8 8" }}
+                    />
+                  )}
+                  {result.lastAccessible && (
+                    <Marker
+                      position={[result.lastAccessible.lat, result.lastAccessible.lng]}
+                      icon={lastAccessIcon}
+                    />
+                  )}
+                </>
               )}
             </>
           )}
-          {route.length > 0 ? (
-            <FitBounds points={route} />
+          {result && result.coords.length > 0 ? (
+            <FitBounds points={result.coords} />
           ) : (
             <FlyTo position={flyTarget} />
           )}
@@ -402,10 +444,12 @@ export function FireRouteApp() {
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 max-w-[92%] rounded-full border border-border bg-card/90 px-5 py-2 text-sm font-medium shadow-xl backdrop-blur">
           <span className="text-muted-foreground">Vehículo · </span>
           <span className="text-primary">{vehicle.name}</span>
+          <span className="text-muted-foreground"> · </span>
+          <span className="text-foreground/80">{PROFILE_LABEL[ghProfile]}</span>
           {summary && (
             <>
               <span className="text-muted-foreground"> · </span>
-              <span className={analysis?.fullyAccessible ? "text-emerald-400" : "text-destructive"}>{summary}</span>
+              <span className={fullyAccessible ? "text-emerald-400" : "text-destructive"}>{summary}</span>
             </>
           )}
         </div>
