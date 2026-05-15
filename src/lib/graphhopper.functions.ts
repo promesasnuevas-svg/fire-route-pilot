@@ -59,43 +59,26 @@ async function ghRoute(
   dims: { height: number; width: number; length: number; weight: number },
   apiKey: string
 ): Promise<{ status: number; body: any }> {
-  const body: Record<string, unknown> = {
-    points: [
-      [origin.lng, origin.lat],
-      [destination.lng, destination.lat],
-    ],
-    profile,
-    points_encoded: false,
-    instructions: false,
-    calc_points: true,
-    locale: "es",
-  };
-  // Solo aplicar custom_model con dimensiones para perfiles de camión.
+  // GraphHopper Directions API soporta perfiles `truck` y `small_truck` que ya
+  // respetan internamente: peso HGV, alto, ancho, vías peatonales y restricciones.
+  // Pasamos las dimensiones como parámetros nativos cuando proceda.
+  const params = new URLSearchParams();
+  params.set("key", apiKey);
+  params.append("point", `${origin.lat},${origin.lng}`);
+  params.append("point", `${destination.lat},${destination.lng}`);
+  params.set("profile", profile);
+  params.set("points_encoded", "false");
+  params.set("instructions", "false");
+  params.set("calc_points", "true");
+  params.set("locale", "es");
   if (profile === "truck" || profile === "small_truck") {
-    body["ch.disable"] = true;
-    body.custom_model = {
-      // Penaliza vías peatonales/pistas y respeta restricciones HGV.
-      priority: [
-        { if: "road_class == PEDESTRIAN", multiply_by: 0 },
-        { if: "road_class == FOOTWAY", multiply_by: 0 },
-        { if: "road_class == PATH", multiply_by: 0 },
-        { if: "road_class == STEPS", multiply_by: 0 },
-        { if: "road_access == PRIVATE", multiply_by: 0 },
-        { if: "road_access == NO", multiply_by: 0 },
-        { if: "max_width < " + dims.width, multiply_by: 0 },
-        { if: "max_height < " + dims.height, multiply_by: 0 },
-        { if: "max_weight < " + dims.weight, multiply_by: 0 },
-        { if: "max_length < " + dims.length, multiply_by: 0 },
-        { if: "hgv == NO", multiply_by: 0 },
-      ],
-    };
+    params.set("vehicle.height", String(dims.height));
+    params.set("vehicle.width", String(dims.width));
+    params.set("vehicle.length", String(dims.length));
+    params.set("vehicle.weight", String(dims.weight * 1000)); // kg
   }
 
-  const res = await fetch(`${GH_BASE}?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const res = await fetch(`${GH_BASE}?${params.toString()}`, { method: "GET" });
   const json = await res.json().catch(() => ({}));
   return { status: res.status, body: json };
 }
