@@ -93,12 +93,11 @@ export function FireRouteApp() {
   const [destination, setDestination] = useState<LatLng | null>(null);
   const [flyTarget, setFlyTarget] = useState<LatLng | null>(null);
   const [calculating, setCalculating] = useState(false);
-  const [route, setRoute] = useState<LatLng[]>([]);
-  const [analysis, setAnalysis] = useState<RouteAnalysis | null>(null);
-  const [summary, setSummary] = useState<string>("");
-  const [stats, setStats] = useState<{ km: number; min: number } | null>(null);
+  const [result, setResult] = useState<GHRouteResult | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [analyzing, setAnalyzing] = useState(false);
+
+  const ghProfile = ghProfileForVehicle(vehicle);
+  const calcRouteFn = useServerFn(calculateGraphHopperRoute);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) return;
@@ -118,63 +117,54 @@ export function FireRouteApp() {
     if (!destination) return;
     setCalculating(true);
     setWarnings([]);
-    setRoute([]);
-    setAnalysis(null);
-    setSummary("");
-    setStats(null);
+    setResult(null);
     try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson&alternatives=true`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (!data.routes?.length) throw new Error("Sin ruta");
-
-      const candidates: { coords: LatLng[]; km: number; min: number }[] = data.routes.map(
-        (r: { geometry: { coordinates: [number, number][] }; distance: number; duration: number }) => ({
-          coords: r.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
-          km: r.distance / 1000,
-          min: r.duration / 60,
-        })
-      );
-
-      setAnalyzing(true);
-      type Cand = { coords: LatLng[]; km: number; min: number; analysis: RouteAnalysis };
-      let chosen: Cand | null = null;
-      let bestPartial: Cand | null = null;
-      for (const c of candidates) {
-        const a = await analyzeRoute(c.coords, vehicle);
-        if (a.fullyAccessible) { chosen = { ...c, analysis: a }; break; }
-        if (!bestPartial || a.violations.length < bestPartial.analysis.violations.length) {
-          bestPartial = { ...c, analysis: a };
-        }
-      }
-      const final: Cand = chosen ?? bestPartial!;
-      setRoute(final.coords);
-      setAnalysis(final.analysis);
-      setStats({ km: final.km, min: final.min });
-      setSummary(summaryMessage(final.analysis, vehicle));
-
+      const r = await calcRouteFn({
+        data: {
+          origin,
+          destination,
+          profile: ghProfile,
+          height: vehicle.height,
+          width: vehicle.width,
+          length: vehicle.length,
+          weight: vehicle.weight,
+        },
+      });
+      setResult(r);
       const w = vehicleRouteWarnings(vehicle);
-      if (!final.analysis.fullyAccessible) {
-        w.unshift("Ruta parcialmente accesible: tramo final inaccesible para este vehículo.");
-        const seen = new Set<string>();
-        for (const v of final.analysis.violations.slice(0, 5)) {
-          const key = v.reason + (v.wayName ?? "");
-          if (seen.has(key)) continue;
-          seen.add(key);
-          w.push(`${v.reason}${v.wayName ? ` — ${v.wayName}` : ""}`);
+      if (r.error) {
+        w.unshift(`GraphHopper: ${r.error}`);
+      } else if (r.degraded) {
+        w.unshift(
+          "Perfil de camión no disponible en su plan GraphHopper: se ha calculado con perfil estándar."
+        );
+      } else if (!r.fullyAccessible) {
+        w.unshift("Ruta parcialmente accesible: el vehículo no llega al destino por carretera.");
+        if (r.walkingMeters && r.walkingMeters > 0) {
+          w.push(
+            `Distancia restante a pie: ${
+              r.walkingMeters >= 1000
+                ? (r.walkingMeters / 1000).toFixed(2) + " km"
+                : Math.round(r.walkingMeters) + " m"
+            }`
+          );
         }
         w.push("Último punto accesible marcado en el mapa.");
-      } else if (chosen) {
-        w.unshift("Ruta validada con datos OSM (sin restricciones detectadas).");
+      } else {
+        w.unshift(`Ruta validada por GraphHopper · perfil ${PROFILE_LABEL[r.effectiveProfile]}.`);
       }
       setWarnings(w);
-    } catch {
-      setWarnings(["No se pudo calcular la ruta. Reintente."]);
+    } catch (e) {
+      setWarnings([`No se pudo calcular la ruta. ${(e as Error)?.message ?? ""}`.trim()]);
     } finally {
-      setAnalyzing(false);
       setCalculating(false);
     }
   };
+
+  const summary = result?.message ?? "";
+  const fullyAccessible = result?.fullyAccessible ?? false;
+  const stats = result?.ok ? { km: result.km, min: result.min } : null;
+  const eta = stats ? new Date(Date.now() + stats.min * 60_000) : null;
 
   const points = useMemo(() => {
     const arr: LatLng[] = [origin];
