@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { useServerFn } from "@tanstack/react-start";
 import {
   Truck,
   Search,
@@ -23,9 +24,12 @@ import {
   RotateCw,
   ShieldCheck,
   Ban,
+  Footprints,
+  Clock,
 } from "lucide-react";
 import { VEHICLES, vehicleRouteWarnings, type Vehicle, type VehicleCategory } from "@/data/vehicles";
-import { analyzeRoute, summaryMessage, type RouteAnalysis } from "@/lib/restrictions";
+import { calculateGraphHopperRoute, type GHRouteResult } from "@/lib/graphhopper.functions";
+import { ghProfileForVehicle, PROFILE_LABEL } from "@/lib/vehicle-profile";
 
 const CATEGORY_META: Record<
   VehicleCategory,
