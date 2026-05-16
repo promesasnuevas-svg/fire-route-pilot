@@ -93,11 +93,11 @@ export function FireRouteApp() {
   const [destination, setDestination] = useState<LatLng | null>(null);
   const [flyTarget, setFlyTarget] = useState<LatLng | null>(null);
   const [calculating, setCalculating] = useState(false);
-  const [result, setResult] = useState<GHRouteResult | null>(null);
+  const [result, setResult] = useState<ORSRouteResult | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
 
-  const ghProfile = ghProfileForVehicle(vehicle);
-  const calcRouteFn = useServerFn(calculateGraphHopperRoute);
+  const ghProfile = orsProfileForVehicle(vehicle);
+  const calcRouteFn = useServerFn(calculateOpenRouteRoute);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) return;
