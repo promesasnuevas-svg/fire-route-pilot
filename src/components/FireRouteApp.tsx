@@ -28,8 +28,8 @@ import {
   Clock,
 } from "lucide-react";
 import { VEHICLES, vehicleRouteWarnings, type Vehicle, type VehicleCategory } from "@/data/vehicles";
-import { calculateGraphHopperRoute, type GHRouteResult } from "@/lib/graphhopper.functions";
-import { ghProfileForVehicle, PROFILE_LABEL } from "@/lib/vehicle-profile";
+import { calculateOpenRouteRoute, type ORSRouteResult } from "@/lib/openroute.functions";
+import { orsProfileForVehicle, PROFILE_LABEL } from "@/lib/vehicle-profile";
 
 const CATEGORY_META: Record<
   VehicleCategory,
