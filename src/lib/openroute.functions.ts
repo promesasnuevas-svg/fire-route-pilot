@@ -1,28 +1,29 @@
-// GraphHopper Routing API server functions.
-// Calcula rutas reales con perfiles de vehículos pesados y, si la ruta directa
-// no es accesible, hace búsqueda binaria del último punto accesible.
+// OpenRouteService Directions API server functions.
+// Calcula rutas reales con el perfil driving-hgv aplicando restricciones de
+// peso, altura, anchura y longitud del vehículo. Si la ruta directa no es
+// accesible, busca por binaria el último punto alcanzable sobre una ruta de
+// referencia con coche.
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const GH_BASE = "https://graphhopper.com/api/1/route";
+const ORS_BASE = "https://api.openrouteservice.org/v2/directions";
 
-export type GHProfile = "truck" | "small_truck" | "car";
+export type ORSProfile = "driving-hgv" | "driving-car";
 
-export type GHRouteResult = {
+export type ORSRouteResult = {
   ok: boolean;
-  profile: GHProfile;
-  effectiveProfile: GHProfile; // perfil realmente usado (puede degradarse a car)
-  degraded: boolean; // true si se degradó a car por restricciones del plan
+  profile: ORSProfile;
+  effectiveProfile: ORSProfile;
+  degraded: boolean;
   fullyAccessible: boolean;
-  coords: { lat: number; lng: number }[]; // ruta completa (lo que se pintará)
+  coords: { lat: number; lng: number }[];
   km: number;
   min: number;
-  // Si fullyAccessible=false:
   accessibleCoords?: { lat: number; lng: number }[];
   blockedCoords?: { lat: number; lng: number }[];
   lastAccessible?: { lat: number; lng: number };
-  walkingMeters?: number; // distancia restante a pie hasta el destino
+  walkingMeters?: number;
   message?: string;
   error?: string;
 };
@@ -30,7 +31,7 @@ export type GHRouteResult = {
 const InputSchema = z.object({
   origin: z.object({ lat: z.number(), lng: z.number() }),
   destination: z.object({ lat: z.number(), lng: z.number() }),
-  profile: z.enum(["truck", "small_truck", "car"]),
+  profile: z.enum(["driving-hgv", "driving-car"]),
   height: z.number().positive().max(10),
   width: z.number().positive().max(5),
   length: z.number().positive().max(30),
@@ -52,53 +53,74 @@ function haversine(a: LL, b: LL): number {
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-async function ghRoute(
+async function orsRoute(
   origin: LL,
   destination: LL,
-  profile: GHProfile,
+  profile: ORSProfile,
   dims: { height: number; width: number; length: number; weight: number },
   apiKey: string
 ): Promise<{ status: number; body: any }> {
-  // GraphHopper Directions API soporta perfiles `truck` y `small_truck` que ya
-  // respetan internamente: peso HGV, alto, ancho, vías peatonales y restricciones.
-  // Pasamos las dimensiones como parámetros nativos cuando proceda.
-  const params = new URLSearchParams();
-  params.set("key", apiKey);
-  params.append("point", `${origin.lat},${origin.lng}`);
-  params.append("point", `${destination.lat},${destination.lng}`);
-  params.set("profile", profile);
-  params.set("points_encoded", "false");
-  params.set("instructions", "false");
-  params.set("calc_points", "true");
-  params.set("locale", "es");
-  if (profile === "truck" || profile === "small_truck") {
-    params.set("vehicle.height", String(dims.height));
-    params.set("vehicle.width", String(dims.width));
-    params.set("vehicle.length", String(dims.length));
-    params.set("vehicle.weight", String(dims.weight * 1000)); // kg
+  const body: any = {
+    coordinates: [
+      [origin.lng, origin.lat],
+      [destination.lng, destination.lat],
+    ],
+    instructions: false,
+    language: "es",
+  };
+
+  if (profile === "driving-hgv") {
+    body.options = {
+      vehicle_type: "hgv",
+      profile_params: {
+        restrictions: {
+          height: dims.height,
+          width: dims.width,
+          length: dims.length,
+          weight: dims.weight, // toneladas
+        },
+      },
+    };
   }
 
-  const res = await fetch(`${GH_BASE}?${params.toString()}`, { method: "GET" });
+  const res = await fetch(`${ORS_BASE}/${profile}/geojson`, {
+    method: "POST",
+    headers: {
+      Authorization: apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/geo+json, application/json",
+    },
+    body: JSON.stringify(body),
+  });
   const json = await res.json().catch(() => ({}));
   return { status: res.status, body: json };
 }
 
 function parsePath(json: any): { coords: LL[]; km: number; min: number } | null {
-  const path = json?.paths?.[0];
-  if (!path) return null;
-  const pts = path.points?.coordinates as [number, number][] | undefined;
-  if (!pts?.length) return null;
+  const feat = json?.features?.[0];
+  const pts = feat?.geometry?.coordinates as [number, number][] | undefined;
+  const sum = feat?.properties?.summary;
+  if (!pts?.length || !sum) return null;
   return {
     coords: pts.map(([lng, lat]) => ({ lat, lng })),
-    km: (path.distance ?? 0) / 1000,
-    min: (path.time ?? 0) / 60000,
+    km: (sum.distance ?? 0) / 1000,
+    min: (sum.duration ?? 0) / 60,
   };
 }
 
-export const calculateGraphHopperRoute = createServerFn({ method: "POST" })
+function extractError(body: any, status: number): string {
+  return (
+    body?.error?.message ||
+    (typeof body?.error === "string" ? body.error : null) ||
+    body?.message ||
+    `OpenRouteService respondió ${status}`
+  );
+}
+
+export const calculateOpenRouteRoute = createServerFn({ method: "POST" })
   .inputValidator((input: Input) => InputSchema.parse(input))
-  .handler(async ({ data }): Promise<GHRouteResult> => {
-    const apiKey = process.env.GRAPHHOPPER_API_KEY;
+  .handler(async ({ data }): Promise<ORSRouteResult> => {
+    const apiKey = process.env.OPENROUTESERVICE_API_KEY;
     if (!apiKey) {
       return {
         ok: false,
@@ -109,7 +131,7 @@ export const calculateGraphHopperRoute = createServerFn({ method: "POST" })
         coords: [],
         km: 0,
         min: 0,
-        error: "GRAPHHOPPER_API_KEY no configurada en el servidor.",
+        error: "OPENROUTESERVICE_API_KEY no configurada en el servidor.",
       };
     }
 
@@ -120,19 +142,11 @@ export const calculateGraphHopperRoute = createServerFn({ method: "POST" })
       weight: data.weight,
     };
 
-    // 1) Intentar el perfil solicitado.
-    let effective: GHProfile = data.profile;
+    // 1) Intentar el perfil solicitado (normalmente driving-hgv).
+    let effective: ORSProfile = data.profile;
     let degraded = false;
-    let attempt = await ghRoute(data.origin, data.destination, effective, dims, apiKey);
+    let attempt = await orsRoute(data.origin, data.destination, effective, dims, apiKey);
 
-    // Si el plan no soporta el perfil truck/small_truck, GH responde 400/401/403.
-    if (attempt.status >= 400 && (effective === "truck" || effective === "small_truck")) {
-      effective = "car";
-      degraded = true;
-      attempt = await ghRoute(data.origin, data.destination, effective, dims, apiKey);
-    }
-
-    // 2) Ruta completa con perfil del vehículo → fully accessible.
     if (attempt.status === 200) {
       const parsed = parsePath(attempt.body);
       if (parsed) {
@@ -145,28 +159,23 @@ export const calculateGraphHopperRoute = createServerFn({ method: "POST" })
           coords: parsed.coords,
           km: parsed.km,
           min: parsed.min,
-          message: degraded
-            ? "Ruta calculada con perfil estándar (perfil de camión no disponible en su plan GraphHopper)."
-            : effective === "car"
-              ? "Ruta válida para el vehículo seleccionado."
-              : "Ruta adaptada para vehículo pesado.",
+          message:
+            effective === "driving-hgv"
+              ? "Ruta adaptada para vehículo pesado."
+              : "Ruta válida para el vehículo seleccionado.",
         };
       }
     }
 
-    // 3) Ruta no encontrada con el perfil del vehículo.
-    //    Pedimos una ruta de referencia con coche y buscamos el último punto
-    //    accesible mediante búsqueda binaria sobre esa polilínea.
+    // 2) Ruta no encontrada con el perfil del vehículo.
+    //    Pedir una ruta de referencia con coche y buscar el último punto
+    //    accesible mediante búsqueda binaria.
     const refAttempt =
-      effective === "car"
+      effective === "driving-car"
         ? attempt
-        : await ghRoute(data.origin, data.destination, "car", dims, apiKey);
+        : await orsRoute(data.origin, data.destination, "driving-car", dims, apiKey);
 
     if (refAttempt.status !== 200) {
-      const msg =
-        refAttempt.body?.message ||
-        refAttempt.body?.hints?.[0]?.message ||
-        `GraphHopper respondió ${refAttempt.status}`;
       return {
         ok: false,
         profile: data.profile,
@@ -176,7 +185,7 @@ export const calculateGraphHopperRoute = createServerFn({ method: "POST" })
         coords: [],
         km: 0,
         min: 0,
-        error: msg,
+        error: extractError(refAttempt.body, refAttempt.status),
       };
     }
 
@@ -195,37 +204,32 @@ export const calculateGraphHopperRoute = createServerFn({ method: "POST" })
       };
     }
 
-    // Si efectivamente estamos usando car como perfil del vehículo, no podemos
-    // detectar restricciones específicas: devolvemos la ruta tal cual.
-    if (effective === "car") {
+    if (effective === "driving-car") {
       return {
         ok: true,
         profile: data.profile,
-        effectiveProfile: "car",
+        effectiveProfile: "driving-car",
         degraded,
         fullyAccessible: true,
         coords: ref.coords,
         km: ref.km,
         min: ref.min,
-        message: degraded
-          ? "Ruta calculada con perfil estándar (perfil de camión no disponible en su plan GraphHopper)."
-          : "Ruta válida para el vehículo seleccionado.",
+        message: "Ruta válida para el vehículo seleccionado.",
       };
     }
 
-    // Búsqueda binaria del último punto de `ref.coords` alcanzable con el perfil pesado.
+    // Búsqueda binaria del último punto accesible para el perfil pesado.
     const coords = ref.coords;
-    let lo = 1; // siempre >0 (origen)
+    let lo = 1;
     let hi = coords.length - 1;
     let lastOkIdx = 0;
     let lastOkPath: { coords: LL[]; km: number; min: number } | null = null;
-    // Limita iteraciones para evitar abuso de cuota (~7 llamadas).
     let iterations = 0;
     while (lo <= hi && iterations < 7) {
       iterations++;
       const mid = Math.floor((lo + hi) / 2);
       const target = coords[mid];
-      const a = await ghRoute(data.origin, target, effective, dims, apiKey);
+      const a = await orsRoute(data.origin, target, effective, dims, apiKey);
       if (a.status === 200) {
         const p = parsePath(a.body);
         if (p) {
@@ -258,8 +262,6 @@ export const calculateGraphHopperRoute = createServerFn({ method: "POST" })
     }
 
     const lastAccessible = coords[lastOkIdx];
-    // Tramo accesible = ruta real del perfil pesado al último punto alcanzable.
-    // Tramo bloqueado = resto de la ruta de referencia (lo que el vehículo no puede recorrer).
     const blocked = coords.slice(lastOkIdx);
     let walking = 0;
     for (let i = lastOkIdx; i < coords.length - 1; i++) {

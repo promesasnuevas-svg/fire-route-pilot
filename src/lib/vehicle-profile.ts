@@ -1,15 +1,14 @@
-// Mapea cada vehículo a un perfil de GraphHopper.
+// Mapea cada vehículo a un perfil de OpenRouteService.
 import type { Vehicle } from "@/data/vehicles";
-import type { GHProfile } from "@/lib/graphhopper.functions";
+import type { ORSProfile } from "@/lib/openroute.functions";
 
-export function ghProfileForVehicle(v: Vehicle): GHProfile {
-  if (v.weight >= 7.5 || v.height >= 3.3 || v.length >= 8) return "truck";
-  if (v.weight >= 3.5) return "small_truck";
-  return "car";
+export function orsProfileForVehicle(v: Vehicle): ORSProfile {
+  // driving-hgv aplica restricciones reales de peso/altura/anchura/longitud.
+  if (v.weight >= 3.5 || v.height >= 2.8 || v.length >= 6) return "driving-hgv";
+  return "driving-car";
 }
 
-export const PROFILE_LABEL: Record<GHProfile, string> = {
-  truck: "Camión pesado (HGV)",
-  small_truck: "Camión ligero",
-  car: "Vehículo estándar",
+export const PROFILE_LABEL: Record<ORSProfile, string> = {
+  "driving-hgv": "Camión pesado (HGV)",
+  "driving-car": "Vehículo estándar",
 };
