@@ -119,7 +119,7 @@ export function FireRouteApp() {
     setWarnings([]);
     setResult(null);
     try {
-      const r = await calcRouteFn({
+      const r: ORSRouteResult = await calcRouteFn({
         data: {
           origin,
           destination,
@@ -133,11 +133,7 @@ export function FireRouteApp() {
       setResult(r);
       const w = vehicleRouteWarnings(vehicle);
       if (r.error) {
-        w.unshift(`GraphHopper: ${r.error}`);
-      } else if (r.degraded) {
-        w.unshift(
-          "Perfil de camión no disponible en su plan GraphHopper: se ha calculado con perfil estándar."
-        );
+        w.unshift(`OpenRouteService: ${r.error}`);
       } else if (!r.fullyAccessible) {
         w.unshift("Ruta parcialmente accesible: el vehículo no llega al destino por carretera.");
         if (r.walkingMeters && r.walkingMeters > 0) {
@@ -151,7 +147,7 @@ export function FireRouteApp() {
         }
         w.push("Último punto accesible marcado en el mapa.");
       } else {
-        w.unshift(`Ruta validada por GraphHopper · perfil ${PROFILE_LABEL[r.effectiveProfile]}.`);
+        w.unshift(`Ruta validada por OpenRouteService · perfil ${PROFILE_LABEL[r.effectiveProfile]}.`);
       }
       setWarnings(w);
     } catch (e) {
