@@ -28,8 +28,8 @@ import {
   Clock,
 } from "lucide-react";
 import { VEHICLES, vehicleRouteWarnings, type Vehicle, type VehicleCategory } from "@/data/vehicles";
-import { calculateGraphHopperRoute, type GHRouteResult } from "@/lib/graphhopper.functions";
-import { ghProfileForVehicle, PROFILE_LABEL } from "@/lib/vehicle-profile";
+import { calculateOpenRouteRoute, type ORSRouteResult } from "@/lib/openroute.functions";
+import { orsProfileForVehicle, PROFILE_LABEL } from "@/lib/vehicle-profile";
 
 const CATEGORY_META: Record<
   VehicleCategory,
@@ -93,11 +93,11 @@ export function FireRouteApp() {
   const [destination, setDestination] = useState<LatLng | null>(null);
   const [flyTarget, setFlyTarget] = useState<LatLng | null>(null);
   const [calculating, setCalculating] = useState(false);
-  const [result, setResult] = useState<GHRouteResult | null>(null);
+  const [result, setResult] = useState<ORSRouteResult | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
 
-  const ghProfile = ghProfileForVehicle(vehicle);
-  const calcRouteFn = useServerFn(calculateGraphHopperRoute);
+  const ghProfile = orsProfileForVehicle(vehicle);
+  const calcRouteFn = useServerFn(calculateOpenRouteRoute);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) return;
@@ -119,7 +119,7 @@ export function FireRouteApp() {
     setWarnings([]);
     setResult(null);
     try {
-      const r = await calcRouteFn({
+      const r: ORSRouteResult = await calcRouteFn({
         data: {
           origin,
           destination,
@@ -133,11 +133,7 @@ export function FireRouteApp() {
       setResult(r);
       const w = vehicleRouteWarnings(vehicle);
       if (r.error) {
-        w.unshift(`GraphHopper: ${r.error}`);
-      } else if (r.degraded) {
-        w.unshift(
-          "Perfil de camión no disponible en su plan GraphHopper: se ha calculado con perfil estándar."
-        );
+        w.unshift(`OpenRouteService: ${r.error}`);
       } else if (!r.fullyAccessible) {
         w.unshift("Ruta parcialmente accesible: el vehículo no llega al destino por carretera.");
         if (r.walkingMeters && r.walkingMeters > 0) {
@@ -151,7 +147,7 @@ export function FireRouteApp() {
         }
         w.push("Último punto accesible marcado en el mapa.");
       } else {
-        w.unshift(`Ruta validada por GraphHopper · perfil ${PROFILE_LABEL[r.effectiveProfile]}.`);
+        w.unshift(`Ruta validada por OpenRouteService · perfil ${PROFILE_LABEL[r.effectiveProfile]}.`);
       }
       setWarnings(w);
     } catch (e) {
@@ -294,7 +290,7 @@ export function FireRouteApp() {
 
           {/* Profile chip */}
           <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs">
-            <span className="text-muted-foreground">Perfil GraphHopper</span>
+            <span className="text-muted-foreground">Perfil ORS</span>
             <span className="font-semibold text-primary">{PROFILE_LABEL[ghProfile]}</span>
           </div>
 
